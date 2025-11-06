@@ -127,7 +127,6 @@ int main() {
     cin >> delivery_points >> charging_stations;
 
     // assuming the time array provided is the delivery sequence the EV guy will be following
-    // assuming one time unit for one kilometer
     // since it also contains the return node the time for final will be (0,1e9)
     vector<pair<double,double>> times(delivery_points);
     for (int i = 0; i < delivery_points; i++) cin >> times[i].first >> times[i].second;
