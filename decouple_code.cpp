@@ -77,15 +77,15 @@ void path_checker(
                 if(time_to_station < dp_c[node][station][charge_at_station]){
                     dp_c[node][station][charge_at_station] = time_to_station;
                 }
+            }
+        }
 
-                // Recharge at station
-                for (int add = 1; charge_at_station + add <= charge_quantums; add++) {
-                    int new_charge = charge_at_station + add;
-                    double depart_time_from_station = time_to_station + charging_time(add);
-                    if(depart_time_from_station < dp_c[node][station][new_charge]){
-                        dp_c[node][station][new_charge] = depart_time_from_station;
-                    }
-                }
+        for (int station = 0; station < charging_stations; station++) {
+            for (int c = 1; c <= charge_quantums; c++) {
+                dp_c[node][station][c] = min(
+                    dp_c[node][station][c],
+                    dp_c[node][station][c - 1] + time_per_charge
+                );
             }
         }
 
@@ -152,8 +152,8 @@ int main() {
     path_checker(delivery_points, charging_stations, times, distance, dis_c);
 }
 
-// Time Complexity: O(Cities * Stations * Distance^2)
-// Space Complexity: O(Cities * Stations * Distance)
+// Time Complexity: O(Cities * Stations * Charge_quantums)
+// Space Complexity: O(Cities * Stations * Charge_quantums)
 
 // test case generator
 // latex algorithm
