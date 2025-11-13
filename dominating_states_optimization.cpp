@@ -3,7 +3,7 @@ using namespace std;
 
 const double INF = 1e9;
 const double time_per_distance = 0.1;
-const double distance_per_charge = 1;
+const double distance_per_charge = 2.5;
 const double time_per_charge = 0.05;
 const int charge_quantums = 50;
 const double MAX_DIS = charge_quantums * distance_per_charge;
@@ -113,7 +113,7 @@ void path_checker(
             }
         }
 
-        double min_tim e= INF;
+        double min_time= INF;
         for (int k = charge_quantums; k >= 0; k--) {
             if (dp_n[node+1][k] > min_time) {
                 dp_n[node+1][k] = INF; // Prune dominated state
