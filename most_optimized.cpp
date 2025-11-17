@@ -176,7 +176,7 @@ void path_checker_external(
     // add one more dis_c row for final depot return (reuse first row)
     dis_c.push_back(dis_c[0]);
 
-    vector <double> cargo_weight(delivery_points);
+    vector <double> cargo_weight(delivery_points-1);
 
     double total_weight = 0;
     for (double w : delivery_weights) {
@@ -186,8 +186,8 @@ void path_checker_external(
     cout << total_weight << endl;
 
     cargo_weight[0] = total_weight;
-    for (int i = 1; i < delivery_points; i++) {
-        cargo_weight[i] = cargo_weight[i-1] - delivery_weights[i];
+    for (int i = 1; i < delivery_points - 1; i++) {
+        cargo_weight[i] = cargo_weight[i-1] - delivery_weights[i-1];
     }
 
     path_checker(delivery_points, charging_stations, times, distance, dis_c, cargo_weight);
@@ -223,7 +223,7 @@ void path_checker_external(
 //     // add one more dis_c row for final depot return (reuse first row)
 //     dis_c.push_back(dis_c[0]);
 
-//     vector <double> cargo_weight(delivery_points);
+//     vector <double> cargo_weight(delivery_points - 1);
 
 //     double total_weight = 0;
 //     for (double w : delivery_weights) {
@@ -231,8 +231,8 @@ void path_checker_external(
 //     }
 
 //     cargo_weight[0] = total_weight;
-//     for (int i = 1; i < delivery_points; i++) {
-//         cargo_weight[i] = cargo_weight[i-1] - delivery_weights[i];
+//     for (int i = 1; i < delivery_points - 1; i++) {
+//         cargo_weight[i] = cargo_weight[i-1] - delivery_weights[i-1];
 //     }
 
 //     path_checker(delivery_points, charging_stations, times, distance, dis_c, cargo_weight);

@@ -85,15 +85,14 @@ void path_checker(
                 if(time_to_station < dp_c[node][station][charge_at_station]){
                     dp_c[node][station][charge_at_station] = time_to_station;
                 }
-            }
-        }
 
-        for (int station = 0; station < charging_stations; station++) {
-            for (int c = 1; c <= charge_quantums; c++) {
-                dp_c[node][station][c] = min(
-                    dp_c[node][station][c],
-                    dp_c[node][station][c - 1] + time_per_charge
-                );
+                for (int add = 1; charge_at_station + add <= charge_quantums; add++) {
+                    int new_charge = charge_at_station + add;
+                    double depart_time = time_to_station + charging_time(add);
+                    if(depart_time < dp_c[node][station][new_charge]){
+                        dp_c[node][station][new_charge] = depart_time;
+                    }
+                }
             }
         }
 
@@ -110,15 +109,6 @@ void path_checker(
                 if(arrival_time < dp_n[node+1][rem_charge]){
                     dp_n[node+1][rem_charge] = arrival_time;
                 }
-            }
-        }
-
-        double min_time= INF;
-        for (int k = charge_quantums; k >= 0; k--) {
-            if (dp_n[node+1][k] > min_time) {
-                dp_n[node+1][k] = INF;
-            } else {
-                min_time = dp_n[node+1][k];
             }
         }
     }
@@ -154,12 +144,14 @@ void path_checker_external(
     // add one more dis_c row for final depot return (reuse first row)
     dis_c.push_back(dis_c[0]);
 
-    vector <double> cargo_weight(delivery_points - 1);
+    vector <double> cargo_weight(delivery_points-1);
 
     double total_weight = 0;
     for (double w : delivery_weights) {
         total_weight += w;
     }
+
+    cout << total_weight << endl;
 
     cargo_weight[0] = total_weight;
     for (int i = 1; i < delivery_points - 1; i++) {
