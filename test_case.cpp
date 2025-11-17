@@ -91,44 +91,22 @@ TestCase generate_test_case(int delivery_points, int charging_stations, string d
         current_time += 0.5;
     }
 
-    // Hard difficulty "trap"
+    // Hard difficulty: force lookahead trap
     if (difficulty == "hard" && delivery_points >= 4 && charging_stations >= 2) {
-        int trap_node_A = 2; // D2
-        int trap_node_B = 3; // D3
-        int trap_node_C = 4; // D4
-        int charger_good = 0;
-        int charger_bad = 1;
+        int A = 2; // D2
+        int B = 3; // D3
+        int good = 0;
 
-        cerr << "// --- TRAP INFO (for debugging) ---\n";
-        cerr << "// Trapping leg D" << trap_node_A << " -> D" << trap_node_B << "\n";
-        cerr << "// 'Desert' leg is D" << trap_node_B << " -> D" << trap_node_C << "\n";
-        cerr << "// 'Good' charger is C" << charger_good << "\n";
-        cerr << "// 'Bad' charger is C" << charger_bad << "\n";
+        double d_AB = MAX_DIS * 0.10;   // A→B (reachable from depot)
+        double d_BC = MAX_DIS * 0.80;   // B→C (requires full or near full charge)
 
-        double desert_dist = MAX_DIS * 0.8;
-        distance[trap_node_B] = desert_dist;
-        cerr << "// Set D" << trap_node_B << "->D" << trap_node_C << " dist (desert): " << desert_dist << "\n";
+        distance[A] = d_AB;
+        distance[B] = d_BC;
 
-        double direct_dist = MAX_DIS * 0.4;
-        distance[trap_node_A] = direct_dist;
-        cerr << "// Set D" << trap_node_A << "->D" << trap_node_B << " dist (direct): " << direct_dist << "\n";
-        distance[trap_node_A - 1] = MAX_DIS * 0.5;
-
-        // Charger positioning
-        dis_c[trap_node_A][charger_good] = 5.0;
-        dis_c[trap_node_B][charger_good] = 5.0;
-
-        dis_c[trap_node_A][charger_bad] = 6.0;
-        dis_c[trap_node_B][charger_bad] = 6.0;
-
-        dis_c[trap_node_B][charger_good] = 5.0;
-        dis_c[trap_node_C][charger_good] = 5.0;
-
-        dis_c[trap_node_B][charger_bad] = 5.0;
-        dis_c[trap_node_C][charger_bad] = 100.0;
-
-        for (auto &t : times)
-            t.second = t.first + 1000.0;
+        dis_c[A][good] = 5.0;
+        for(int j=0; j < charging_stations; j++){
+            dis_c[B][j] = MAX_DIS * 2;
+        }
     }
 
     // --- Output Test Case ---
