@@ -3,7 +3,7 @@
 using namespace std;
 using namespace std::chrono;
 
-// --- Constants ---
+// Constants
 const double TIME_PER_DISTANCE = 0.1;
 const double DISTANCE_PER_CHARGE = 3.0;
 const double TIME_PER_CHARGE = 0.05;
@@ -11,7 +11,6 @@ const int CHARGE_QUANTUMS = 50;
 const double MAX_DIS = CHARGE_QUANTUMS * DISTANCE_PER_CHARGE;
 const double BASE_CONSUMPTION_PER_DIST = 1.0 / DISTANCE_PER_CHARGE;
 const double WEIGHT_PENALTY_FACTOR = 0.0001;
-// --- End Constants ---
 
 struct TestCase {
     int cities;
@@ -52,7 +51,7 @@ int get_charge_loss(double dis, double cargo_weight) {
 TestCase generate_test_case(int delivery_points, int charging_stations, string difficulty) {
     int num_nodes = delivery_points + 1; // Depot + N deliveries
 
-    // --- Generate random coordinates ---
+    // Generate random coordinates
     vector<pair<double,double>> nodes(num_nodes);
     for (int i = 0; i < num_nodes; i++)
         nodes[i] = {rand_double(0, 50), rand_double(0, 50)};
@@ -61,18 +60,18 @@ TestCase generate_test_case(int delivery_points, int charging_stations, string d
     for (int i = 0; i < charging_stations; i++)
         stations[i] = {rand_double(0, 50), rand_double(0, 50)};
 
-    // --- Delivery weights ---
+    // Delivery weights
     vector<double> delivery_weights(delivery_points);
     for (int i = 0; i < delivery_points; i++)
         delivery_weights[i] = rand_double(5, 50);
 
-    // --- Distances between delivery nodes (plus back to depot) ---
+    // Distances between delivery nodes (plus back to depot)
     vector<double> distance;
     for (int i = 0; i < num_nodes - 1; i++)
         distance.push_back(get_dist(nodes[i], nodes[i + 1]));
-    distance.push_back(get_dist(nodes[num_nodes - 1], nodes[0])); // back to depot
+    distance.push_back(get_dist(nodes[num_nodes - 1], nodes[0]));
 
-    // --- Distance from each node to each charging station ---
+    // Distance from each node to each charging station
     vector<vector<double>> dis_c(num_nodes, vector<double>(charging_stations));
     for (int i = 0; i < num_nodes; i++) {
         for (int j = 0; j < charging_stations; j++) {
@@ -80,7 +79,7 @@ TestCase generate_test_case(int delivery_points, int charging_stations, string d
         }
     }
 
-    // --- Time windows ---
+    // Time windows
     vector<pair<double,double>> times;
     double current_time = 0.0;
     for (int i = 0; i < delivery_points; i++) {
@@ -92,7 +91,7 @@ TestCase generate_test_case(int delivery_points, int charging_stations, string d
         current_time += 0.5;
     }
 
-    // --- Hard difficulty "trap" ---
+    // Hard difficulty "trap"
     if (difficulty == "hard" && delivery_points >= 4 && charging_stations >= 2) {
         int trap_node_A = 2; // D2
         int trap_node_B = 3; // D3
