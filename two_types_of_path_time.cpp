@@ -223,9 +223,9 @@ int main() {
 
     // add one more dis_c row for final depot return (reuse first row)
     dis_c_type1.push_back(dis_c_type1[0]);
-    dis_c_type1.push_back(dis_c_type2[0]);
+    dis_c_type2.push_back(dis_c_type2[0]);
 
-    vector <double> cargo_weight(delivery_points);
+    vector <double> cargo_weight(delivery_points - 1);
 
     double total_weight = 0;
     for (double w : delivery_weights) {
@@ -233,8 +233,8 @@ int main() {
     }
 
     cargo_weight[0] = total_weight;
-    for (int i = 1; i < delivery_points; i++) {
-        cargo_weight[i] = cargo_weight[i-1] - delivery_weights[i];
+    for (int i = 1; i < delivery_points-1; i++) {
+        cargo_weight[i] = cargo_weight[i-1] - delivery_weights[i-1];
     }
 
     path_checker_min_time(delivery_points,
