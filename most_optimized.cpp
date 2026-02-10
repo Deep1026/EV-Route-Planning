@@ -5,30 +5,30 @@ const double INF = 1e9;
 const double time_per_distance = 0.1;
 const double distance_per_charge = 3;
 const double time_per_charge = 0.05;
-const int charge_quantums = 50;
+const int charge_quantums = 8;
 const double MAX_DIS = charge_quantums * distance_per_charge;
 const double base_consumption_per_dist = 1.0 / distance_per_charge;
 const double weight_penalty_factor = 0.0001;
 
-double time_for_distance(double dis){
+static double time_for_distance(double dis){
     return time_per_distance * dis;
 }
 
-double distance_for_charge(int charge){
+static double distance_for_charge(int charge){
     return distance_per_charge * charge;
 }
 
-int charge_loss_for_distance(double dis, double cargo_weight){
+static int charge_loss_for_distance(double dis, double cargo_weight){
     double effective_consumption = base_consumption_per_dist + (cargo_weight * weight_penalty_factor);
     double charge_loss = dis * effective_consumption;
     return ceil(charge_loss);
 }
 
-double charging_time(int del_charge){
+static double charging_time(int del_charge){
     return del_charge * time_per_charge;
 }
 
-void path_checker(
+static void path_checker(
     int delivery_points,
     int charging_stations,
     const vector<pair<double, double>> &times,
@@ -54,7 +54,6 @@ void path_checker(
 
         double current_weight = cargo_weight[node];
 
-        // --- OPTIMIZATION 1: PRE-CALCULATE ---
         // Pre-calculate A -> B transition
         double time_to_next_node = time_for_distance(distance[node]);
         int loss_to_next_node = charge_loss_for_distance(distance[node], current_weight);
@@ -71,7 +70,6 @@ void path_checker(
             time_from_station[s] = time_for_distance(dis_c[node+1][s]);
             loss_from_station[s] = charge_loss_for_distance(dis_c[node+1][s], current_weight);
         }
-        // --- END OPTIMIZATION 1 ---
 
         for(int charge = 0; charge <= charge_quantums; charge++){
             double arrival_time = dp_n[node][charge];
@@ -81,22 +79,20 @@ void path_checker(
             if(arrival_time > times[node].second) continue;
 
             // Go directly to next city ( A -> B)
-            // NOW USES PRE-CALCULATED VALUES
             if(charge >= loss_to_next_node){
                 int rem_charge = charge - loss_to_next_node;
                 double arrival_time_next_node = arrival_time + time_to_next_node;
                 
-                // (See Optimization 2 for this new 'if' statement)
-                if (arrival_time_next_node <= times[node+1].second) { 
+                //
+                // if (arrival_time_next_node <= times[node+1].second) { 
                     if(arrival_time_next_node < dp_n[node+1][rem_charge]) {
                         dp_n[node+1][rem_charge] = arrival_time_next_node;
                     }
-                }
+                // }
             }
 
             // Visit charging stations ( A -> S)
             for (int station = 0; station < charging_stations; station++) {
-                // NOW USES PRE-CALCULATED VALUES
                 int charge_loss_to_station = loss_to_station[station]; 
 
                 if(charge < charge_loss_to_station) continue;
@@ -109,24 +105,25 @@ void path_checker(
                 }
             }
         }
-        
-        // ... (Charging at station loop is fine) ...
 
         // From stations to next city ( S -> B)
         for (int station = 0; station < charging_stations; station++) {
-            // Get pre-calculated values
-            double dist_to_next = time_from_station[station];
+            double time_to_next = time_from_station[station];
             int charge_needed_to_next = loss_from_station[station];
+
+            for (int charge = 1; charge <=charge_quantums; charge++) {
+                dp_c[node][station][charge] = min(dp_c[node][station][charge], 
+                    dp_c[node][station][charge-1] + charging_time(1));
+            }
 
             for (int charge = 0; charge <= charge_quantums; charge++) {
                 if (dp_c[node][station][charge] == INF) continue;
 
                 if (charge < charge_needed_to_next) continue;
-                
-                int rem_charge = charge - charge_needed_to_next;
-                double arrival_time_at_next = dp_c[node][station][charge] + dist_to_next;
 
-                // (See Optimization 2 for this new 'if' statement)
+                int rem_charge = charge - charge_needed_to_next;
+                double arrival_time_at_next = dp_c[node][station][charge] + time_to_next;
+
                 if (arrival_time_at_next <= times[node+1].second) {
                     if(arrival_time_at_next < dp_n[node+1][rem_charge]){
                         dp_n[node+1][rem_charge] = arrival_time_at_next;
@@ -138,7 +135,7 @@ void path_checker(
         double min_time= INF;
         for (int k = charge_quantums; k >= 0; k--) {
             if (dp_n[node+1][k] > min_time) {
-                dp_n[node+1][k] = INF; // Prune dominated state
+                dp_n[node+1][k] = INF;
             } else {
                 min_time = dp_n[node+1][k];
             }
@@ -164,11 +161,12 @@ void path_checker(
 void path_checker_external(
     int delivery_points,
     int charging_stations,
-    vector<pair<double, double>> &times,
-    vector<double> &distance,
-    vector<vector<double>> &dis_c,
-    vector<double> &delivery_weights
+    vector<pair<double, double>> times, // delivery_points
+    vector<double> distance, // delivery_points + 1
+    vector<vector<double>> dis_c, // delivery_points + 2
+    vector<double> delivery_weights // delivery_points
 ){
+//     cout << times.back().first << endl;
     times.insert(times.begin(), {0, INF});
     times.push_back({0, INF});
     delivery_points += 2;
@@ -176,14 +174,12 @@ void path_checker_external(
     // add one more dis_c row for final depot return (reuse first row)
     dis_c.push_back(dis_c[0]);
 
-    vector <double> cargo_weight(delivery_points-1);
+    vector <double> cargo_weight(delivery_points - 1);
 
     double total_weight = 0;
     for (double w : delivery_weights) {
         total_weight += w;
     }
-
-    cout << total_weight << endl;
 
     cargo_weight[0] = total_weight;
     for (int i = 1; i < delivery_points - 1; i++) {
@@ -193,55 +189,50 @@ void path_checker_external(
     path_checker(delivery_points, charging_stations, times, distance, dis_c, cargo_weight);
 }
 
-// int main() {
-//     int delivery_points, charging_stations;
-//     cin >> delivery_points >> charging_stations;
+int main() {
+    int delivery_points, charging_stations;
+    cin >> delivery_points >> charging_stations;
 
-//     // assuming the time array provided is the delivery sequence the EV guy will be following
-//     // since it also contains the return node the time for final will be (0,1e9)
-//     vector<pair<double,double>> times(delivery_points);
-//     for (int i = 0; i < delivery_points; i++) cin >> times[i].first >> times[i].second;
+    // assuming the time array provided is the delivery sequence the EV guy will be following
+    // since it also contains the return node the time for final will be (0,1e9)
+    vector<pair<double,double>> times(delivery_points);
+    for (int i = 0; i < delivery_points; i++) cin >> times[i].first >> times[i].second;
 
-//     vector <double> delivery_weights(delivery_points);
-//     for (int i = 0; i < delivery_points; i++) cin >> delivery_weights[i];
+    vector <double> delivery_weights(delivery_points);
+    for (int i = 0; i < delivery_points; i++) cin >> delivery_weights[i];
 
-//     // take in two extra distances, depot to first city and last city to depot
-//     vector<double> distance(delivery_points + 1);
-//     for (int i = 0; i <= delivery_points; i++) cin >> distance[i];
+    // take in two extra distances, depot to first city and last city to depot
+    vector<double> distance(delivery_points + 1);
+    for (int i = 0; i <= delivery_points; i++) cin >> distance[i];
 
-//     // distance of charging stations from node, here first array will be depot to charging station, so one extra
-//     vector<vector<double>> dis_c(delivery_points + 1, vector<double>(charging_stations));
-//     for (int i = 0; i <= delivery_points; i++)
-//         for (int j = 0; j < charging_stations; j++)
-//             cin >> dis_c[i][j];
+    // distance of charging stations from node, here first array will be depot to charging station, so one extra
+    vector<vector<double>> dis_c(delivery_points + 1, vector<double>(charging_stations));
+    for (int i = 0; i <= delivery_points; i++)
+        for (int j = 0; j < charging_stations; j++)
+            cin >> dis_c[i][j];
 
-//     // add depot start + end
-//     times.insert(times.begin(), {0, INF});
-//     times.push_back({0, INF});
-//     delivery_points += 2;
+    // add depot start + end
+    times.insert(times.begin(), {0, INF});
+    times.push_back({0, INF});
+    delivery_points += 2;
 
-//     // add one more dis_c row for final depot return (reuse first row)
-//     dis_c.push_back(dis_c[0]);
+    // add one more dis_c row for final depot return (reuse first row)
+    dis_c.push_back(dis_c[0]);
 
-//     vector <double> cargo_weight(delivery_points - 1);
+    vector <double> cargo_weight(delivery_points - 1);
 
-//     double total_weight = 0;
-//     for (double w : delivery_weights) {
-//         total_weight += w;
-//     }
+    double total_weight = 0;
+    for (double w : delivery_weights) {
+        total_weight += w;
+    }
 
-//     cargo_weight[0] = total_weight;
-//     for (int i = 1; i < delivery_points - 1; i++) {
-//         cargo_weight[i] = cargo_weight[i-1] - delivery_weights[i-1];
-//     }
+    cargo_weight[0] = total_weight;
+    for (int i = 1; i < delivery_points - 1; i++) {
+        cargo_weight[i] = cargo_weight[i-1] - delivery_weights[i-1];
+    }
 
-//     path_checker(delivery_points, charging_stations, times, distance, dis_c, cargo_weight);
-// }
+    path_checker(delivery_points, charging_stations, times, distance, dis_c, cargo_weight);
+}
 
 // Time Complexity: O(Cities * Stations * Charge_quantums)
 // Space Complexity: O(Cities * Stations * Charge_quantums)
-
-// test case generator
-// latex algorithm
-// better approximate dp vs. new dp state with weights
-// decouple the code (add relations between energy and distance as input)
