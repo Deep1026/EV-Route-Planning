@@ -10,8 +10,10 @@ DISTANCE_PER_CHARGE = 5
 TIME_PER_CHARGE = 0.05
 CHARGE_QUANTUMS = 100
 MAX_BATTERY = CHARGE_QUANTUMS 
-BASE_CONSUMPTION = 1 / DISTANCE_PER_CHARGE
+VEHICLE_MASS = 60
 WEIGHT_PENALTY = 0.01
+THETA = 0.005
+FUEL_CAPACITY = 100
 
 @dataclass
 class Label:
@@ -22,9 +24,13 @@ class Label:
 def _calc_drive_time(dist):
     return TIME_PER_DISTANCE * dist
 
-def _calc_consumption(dist, weight):
-    factor = BASE_CONSUMPTION + (weight * WEIGHT_PENALTY)
-    return math.ceil(dist * factor)
+def _calc_consumption(dist: float, weight: float) -> int:
+    consumption_factor = (VEHICLE_MASS + weight) * THETA
+    energy_consumed = dist * consumption_factor
+    energy_per_quantum = FUEL_CAPACITY / CHARGE_QUANTUMS
+    quantums_lost = math.ceil(energy_consumed / energy_per_quantum)
+    
+    return quantums_lost
 
 def prune_dominated(labels: list):
     if not labels:
