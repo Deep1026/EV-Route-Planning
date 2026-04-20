@@ -1,25 +1,30 @@
 import math
 import numpy as np
 import time
+import helper_functions
 from docplex.mp.model import Model
 
 INF = 1e9
-time_per_distance = 1
-distance_per_charge = 2
-time_per_charge = 0.05
-charge_quantums = 50  # This acts as 'B' (Battery Capacity) in CPLEX
-base_consumption_per_dist = 1 / distance_per_charge
-weight_penalty_factor = 0.001
+time_per_charge = 3
+charge_quantums = 10  # This acts as 'B' (Battery Capacity) in CPLEX
+vehicle_mass = 60
+fuel_consumption_rate = 0.001
+vehicle_speed = 1
+fuel_capacity = 100
 
-# 2. SHARED PHYSICS FUNCTIONS
+# SHARED PHYSICS FUNCTIONS
 def _time_for_distance(dist: float) -> float:
-    return time_per_distance * dist
+    return dist / vehicle_speed
 
 def _charge_loss_for_distance(dist: float, weight: float) -> int:
-    consumption_factor = base_consumption_per_dist + weight * weight_penalty_factor
-    return math.ceil(dist * consumption_factor)
+    consumption_factor = (vehicle_mass + weight) * fuel_consumption_rate
+    energy_consumed = dist * consumption_factor
+    energy_per_quantum = fuel_capacity / charge_quantums
+    quantums_lost = math.ceil(energy_consumed / energy_per_quantum)
+    
+    return quantums_lost
 
-# 3. DYNAMIC PROGRAMMING ALGORITHM
+# DYNAMIC PROGRAMMING ALGORITHM
 def _min_time(delivery_points, charging_stations, time_windows, distance_between_points, distance_to_stations, cumulative_weight):
     dp_points = np.full((delivery_points, charge_quantums + 1), INF)
     dp_stations = np.full((delivery_points, charging_stations, charge_quantums + 1), INF)
@@ -29,6 +34,7 @@ def _min_time(delivery_points, charging_stations, time_windows, distance_between
     for node in range(delivery_points - 1):
         current_weight = cumulative_weight[node]
         time_to_next_node = _time_for_distance(distance_between_points[node])
+        # print(time_to_next_node)
         charge_loss_to_next_node = _charge_loss_for_distance(distance_between_points[node], current_weight)
 
         for charge in range(charge_quantums + 1):
@@ -41,7 +47,7 @@ def _min_time(delivery_points, charging_stations, time_windows, distance_between
             if charge >= charge_loss_to_next_node:
                 future_charge = charge - charge_loss_to_next_node
                 dp_points[node+1, future_charge] = min(dp_points[node+1, future_charge], current_time + time_to_next_node)
-            
+
             # Route: A -> Station
             for station in range(charging_stations):
                 charge_to_station = _charge_loss_for_distance(distance_to_stations[node][station], current_weight)
@@ -49,7 +55,7 @@ def _min_time(delivery_points, charging_stations, time_windows, distance_between
                 if charge >= charge_to_station:
                     dp_stations[node, station, charge - charge_to_station] = min(
                         dp_stations[node, station, charge - charge_to_station], current_time + time_to_station)
-        
+
         # At Station
         for station in range(charging_stations):
             # Charging
@@ -77,7 +83,6 @@ def _min_time(delivery_points, charging_stations, time_windows, distance_between
             min_time = min(min_time, dp_points[node+1, charge])
             if dp_points[node+1, charge] > min_time:
                 dp_points[node+1, charge] = INF
-        
     ans = INF
     for charge in range(charge_quantums+1):
         ans = min(ans, dp_points[delivery_points-1, charge])
@@ -85,7 +90,6 @@ def _min_time(delivery_points, charging_stations, time_windows, distance_between
     return ans if ans != INF else None
 
 def solve_via_dp(delivery_points, charging_stations, time_windows, distance_between_points, distance_to_stations, cargo_weight):
-    # Padding depot logic
     dp_pts = delivery_points + 2
     tw = [[0, INF]] + time_windows + [[0, INF]]
     dts = distance_to_stations + [distance_to_stations[0]]
@@ -98,7 +102,7 @@ def solve_via_dp(delivery_points, charging_stations, time_windows, distance_betw
 
     return _min_time(dp_pts, charging_stations, tw, distance_between_points, dts, cumulative_weights)
 
-# 4. PRECOMPUTATION BRIDGE FOR CPLEX
+# PRECOMPUTATION BRIDGE FOR CPLEX
 def precompute_cplex_data(delivery_points, charging_stations, time_windows, distance_between_points, distance_to_stations, cargo_weight):
     """
     Applies the exact same depot padding and weight math as the DP approach,
@@ -109,7 +113,7 @@ def precompute_cplex_data(delivery_points, charging_stations, time_windows, dist
     J_C = list(range(charging_stations))
     L = list(range(1, B + 1))
     
-    # 1. Pad inputs (matching DP depot logic)
+    # Pad inputs
     tw = [[0, INF]] + time_windows + [[0, INF]]
     dts = distance_to_stations + [distance_to_stations[0]]
     
@@ -119,17 +123,17 @@ def precompute_cplex_data(delivery_points, charging_stations, time_windows, dist
         total_weight -= w
         cum_weights.append(total_weight)
         
-    # 2. Extract Time Windows
+    # Extract Time Windows
     a = {k: tw[k][0] for k in range(n)}
     b = {k: tw[k][1] for k in range(n)}
     
-    # 3. Build Cost Matrices
+    # Build Cost Matrices
     t_dir, e_dir = {}, {}
     t_to_c, e_to_c = {}, {}
     t_from_c, e_from_c = {}, {}
     
     for k in range(n - 1):
-        w = cum_weights[k] # Current cargo weight on this leg
+        w = cum_weights[k]
         
         # Direct leg
         d_dir = distance_between_points[k]
@@ -151,10 +155,10 @@ def precompute_cplex_data(delivery_points, charging_stations, time_windows, dist
     
     return n, B, J_C, L, a, b, t_dir, t_to_c, t_from_c, e_dir, e_to_c, e_from_c, CT
 
-# 5. CPLEX MILP MODEL
+# CPLEX MILP MODEL
 def build_and_solve_cplex(n, B, J_C, L, a, b, t_dir, t_to_c, t_from_c, e_dir, e_to_c, e_from_c, CT):
     mdl = Model(name='EV_Min_Arrival_Time')
-    R = list(range(n)) # Zero-indexed to match DP
+    R = list(range(n))
     
     # Variables
     t = mdl.continuous_var_dict(R, name='t')
@@ -230,20 +234,42 @@ def build_and_solve_cplex(n, B, J_C, L, a, b, t_dir, t_to_c, t_from_c, e_dir, e_
     else:
         return None
 
-# 6. PIPELINE RUNNER
 def run_pipeline():
+
+    global time_per_charge
+    global fuel_capacity
    
-    delivery_points = 3
-    charging_stations = 2
-    time_windows = [[0, 20], [20, 27], [30, 39]]
-    distance_between_points = [15, 5, 10, 15] # n + 1 legs
-    distance_to_stations = [
-        [5, 10],  # From Depot start
-        [10, 5],  # From Node 1
-        [15, 8],  # From Node 2
-        [10, 10], # From Node 3
-    ]
-    cargo_weight = [500, 300, 200]
+    depot, customers, stations, metadata = helper_functions.parse_custom_schneider_dataset("/Users/deepdas/Desktop/EVRP/final/evrptw_instances/C101C10.txt")
+    # 2. Generate Fixed Path (assuming Vehicle Capacity = 200)
+    # This acts as your Solomon sequence generator
+    fixed_route = helper_functions.simple_sorted_insertion(depot, customers, vehicle_speed)
+
+    # print("Dataset Metadata:", metadata)
+    
+    # Safely extract capacity (defaults to 200 if missing)
+    fuel_capacity = metadata.get('fuel_capacity', 77.75)
+    consumption_rate = metadata.get('consumption_rate', 1.0)
+    inverse_refueling_rate = metadata.get('inverse_refueling_rate')
+    time_per_charge = ( fuel_capacity / charge_quantums ) * inverse_refueling_rate
+
+    # print(fuel_capacity)
+    # print(consumption_rate)
+    
+    # 3. Adapt to Pipeline Format
+    pipeline_inputs = helper_functions.prepare_pipeline_inputs(depot, fixed_route, stations)
+    
+    # Assigning to your variables
+    delivery_points = pipeline_inputs["delivery_points"]
+    charging_stations = pipeline_inputs["charging_stations"]
+    time_windows = pipeline_inputs["time_windows"]
+    distance_between_points = pipeline_inputs["distance_between_points"]
+    distance_to_stations = pipeline_inputs["distance_to_stations"]
+    cargo_weight = pipeline_inputs["cargo_weight"]
+
+    # print(time_windows)
+    # print(distance_between_points)
+
+    print(f"Extracted a route with {delivery_points} customers.")
 
     dp_start = time.time()
     dp_ans = solve_via_dp(
